@@ -8,9 +8,12 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 import itertools
 import math
+import os
 
 DEFAULT_RANDOMNESS = 10
 DEFAULT_N_POINTS = 64
+DEFAULT_LINE_SCALE = 1
+DEFAULT_N_CLUSTERS = 3
 
 def rand_vector(r):
     return np.array([
@@ -21,7 +24,7 @@ def rand_vector(r):
 def generate_line_point(x):
     v0 = np.array([43, -14, 17, 2, 50])
     v1 = np.array([15, -19, 2, -1, 1])
-    return v1*x*100000 + v0
+    return v1*x + v0
 
 def generate_plane_point(x, y):
     v0 = np.array([432, 234, 23, 515, -100])
@@ -36,33 +39,37 @@ def process_dataset(data, n_components=2):
     data_scaled = StandardScaler().fit_transform(data)
     return PCA(n_components).fit_transform(data_scaled)
 
-def clusterize(data, k=3):
-    kmeans = KMeans(n_clusters=k)
+def clusterize(data, k, seed):
+    kmeans = KMeans(n_clusters=k, random_state=seed)
     kmeans.fit(data)
     return kmeans.labels_, kmeans.cluster_centers_
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-r", "--randomness", type=int, default=DEFAULT_RANDOMNESS)
-    parser.add_argument("-s", "--seed", type=int, default=time.time())
+    parser.add_argument("-s", "--seed", type=int, default=int(time.time()))
     parser.add_argument("-n", type=int, default=DEFAULT_N_POINTS)
-    parser.add_argument("--line-scale", type=float, default=1)
-    parser.add_argument("-i", "--inverse", action='store-true')
+    parser.add_argument("--line-scale", type=float, default=DEFAULT_LINE_SCALE)
+    parser.add_argument("-c", "--clusters", type=int, default=DEFAULT_N_CLUSTERS)
+    parser.add_argument("-S", "--cluster-seed", type=int, default=int(time.time()))
+    #parser.add_argument("-i", "--inverse", action='store-true')
 
     args = parser.parse_args()
 
     random.seed(args.seed)
     datasets = {}
-    
+
     points = []
     for x in range(math.ceil(math.sqrt(args.n))):
         for y in range(math.ceil(math.sqrt(args.n))):
             points.append(generate_plane_point(x, y))
     datasets["plane"] = np.array(points[0:args.n])
-
+    
     datasets["line"] = np.array([generate_line_point(x * args.line_scale) for x in range(args.n)])
 
     datasets["random"] = np.array([generate_random_point() for _ in range(args.n)])
+
+    os.makedirs("plots", exist_ok=True)
 
     for name, data in datasets.items():
         for i, j in itertools.product(range(args.n), range(5)):
@@ -71,15 +78,15 @@ def main():
         print(result)
 
         plt.cla()
-        
-        k = 3
-        labels, centroids = clusterize(result)
-        for i in range(k):
-            plt.plot(result[labels == i, 0], result[labels == i, 1], 'o')
 
-        plt.scatter(centroids[:, 0], centroids[:, 1], s=300, c='red', marker='X')
+        for k in range(2, args.clusters + 1):
+            labels, centroids = clusterize(result, args.clusters, args.cluster_seed)
+            for i in range(k):
+                plt.plot(result[labels == i, 0], result[labels == i, 1], 'o')
 
-        plt.savefig(f"plots/{name}.png")
+            plt.scatter(centroids[:, 0], centroids[:, 1], s=300, c='red', marker='X')
+
+            plt.savefig(f"plots/{name}-{k}.png")
 
 if __name__ == "__main__":
     main()
